@@ -1,0 +1,123 @@
+import FinanceDataReader as fdr
+import csv
+import pandas as pd
+
+
+def main():
+    # 1. 사용자가 직접 주식 코드 입력
+    code = input("Enter the stock code: ")
+
+    # 2. KRX 시장 및 KRW 통화 사용
+
+    # 3. 매수 시작일 입력
+    Day_0_date = input("Enter the start date (YYYY-MM-DD): ")
+    Day_0_stock_price = fdr.DataReader(code, Day_0_date).iloc[0]['Open']
+
+    # 초기값 설정
+    Day_0_stock_amount = 500000 // Day_0_stock_price
+    Day_0_buy_cash = Day_0_stock_price * Day_0_stock_amount
+    Day_0_total_position_value = Day_0_stock_amount * Day_0_stock_price
+    Buy_n = 1
+    Day_n = 0
+    
+    # Day 0의 결과를 출력하고 CSV 파일에 추가
+    Day_0_result_string = f"Day 0: Stock Price = {Day_0_stock_price}, Result = 0.00"
+    output_to_csv([Day_0_result_string], 'output.csv', append=False)
+
+    output = []
+
+    while True:
+        Day_n += 1
+        next_date = fdr.DataReader(code, Day_0_date).index[Day_n]
+        try:
+            Day_n_stock_price = fdr.DataReader(code, next_date.strftime('%Y-%m-%d')).iloc[0]['Open']
+            Day_n_total_stock_amount = Day_0_stock_amount
+            Day_n_total_buy_cash = Day_0_buy_cash
+            Day_n_total_postion_value = Day_n_stock_price * Day_n_total_stock_amount
+            Day_n_result = ((Day_n_total_postion_value / Day_n_total_buy_cash) - 1) * 100
+
+            result_string = f"Day {Day_n}: Stock Price = {Day_n_stock_price}, Result = {Day_n_result}"
+            output.append(result_string)
+            print(result_string)
+
+            if Day_n_result >= 7 and Day_n_result < 15:
+                # Buy
+                Buy_n += 1
+                Day_n_stock_amount = 500000 // Day_n_stock_price
+                Day_n_buy_cash = Day_n_stock_price * Day_n_stock_amount
+            elif Day_n_result > 20 or Day_n_result < -20:
+                # Sell
+                output_to_csv(output, 'output.csv')
+                print("Sell Condition Met!")
+                print_additional_info(code, Day_n_total_stock_amount, Day_n_result, Day_0_date, Day_0_stock_price, Day_n, Buy_n, Day_n_stock_price, Day_n_total_postion_value, Day_n_total_buy_cash)
+                break
+        except:
+            print("Unable to update opening price anymore.")
+            print("Executing sell.")
+            output_to_csv(output, 'output.csv')
+            print_additional_info(code, Day_n_total_stock_amount, Day_n_result, Day_0_date, Day_0_stock_price, Day_n, Buy_n, Day_n_stock_price, Day_n_total_postion_value, Day_n_total_buy_cash)
+            break
+
+def output_to_csv(output, filename, append=True):
+    mode = 'a' if append else 'w'
+    with open(filename, mode, newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        for line in output:
+            writer.writerow([line.strip()])
+
+def print_additional_info(code, total_stock_amount, result, start_date, start_price, days_held, buy_count, selling_price, profit, buy_cash):
+    print("Additional Information:")
+    print(f"Stock Code: {code}")
+    print(f"Total Stock Amount: {total_stock_amount}")
+    print(f"Result: {result}")
+    print(f"Start Date: {start_date}")
+    print(f"Start Price: {start_price}")
+    print(f"Days Held: {days_held}")
+    print(f"Buy Count: {buy_count}")
+    print(f"Selling Price: {selling_price}")
+    print(f"Profit: {profit}")
+    print(f"Buy Cash: {buy_cash}")
+
+if __name__ == "__main__":
+    main()
+
+# CSV 파일로 데이터를 표와 플롯으로 나태내려고 한다.
+# CSV 파일을 읽어옵니다.
+with open('output.csv', 'r') as file:
+    lines = file.readlines()
+
+# 데이터를 저장할 리스트를 생성합니다.
+data = []
+
+# 각 줄에 대해 데이터를 파싱합니다.
+for line in lines:
+    day_index = line.split(':')[0].strip().replace('"', '')  # Day 인덱스를 추출하고 큰따옴표를 제거합니다.
+    stock_price, result = line.split(',')[0].split('=')[1].strip().replace('"', ''), line.split(',')[1].split('=')[1].strip().replace('"', '')  # Stock Price와 Result 값을 추출하고 큰따옴표를 제거합니다.
+    result = round(float(result), 2)  # 결과를 소수점 아래 둘째 자리까지 반올림합니다.
+    data.append([day_index, stock_price, result])
+
+# 데이터프레임을 생성합니다.
+df = pd.DataFrame(data, columns=['Day', 'Stock Price', 'Result'])
+
+# 예쁜 표로 출력합니다.
+display(df)
+
+import matplotlib.pyplot as plt
+
+# X축은 Day, Y축은 Result로 설정하여 선형 그래프를 그립니다.
+plt.plot(df.index + 1, df['Result'])  # X축을 1부터 시작하도록 조정합니다.
+
+# Result가 -20과 +20에 해당하는 회색 점선으로 수평선을 추가합니다.
+plt.axhline(y=-20, color='gray', linestyle='--')
+plt.axhline(y=20, color='gray', linestyle='--')
+
+# 그래프 제목과 축 레이블을 추가합니다.
+plt.title('Stock Result Over Days')
+plt.xlabel('Day')
+plt.ylabel('Result')
+
+# Y축 범위를 -30에서 30으로 설정합니다.
+plt.ylim(-30, 30)
+
+# 그래프를 표시합니다.
+plt.show()
